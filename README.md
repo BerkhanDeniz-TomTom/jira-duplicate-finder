@@ -15,6 +15,39 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-3. Access the Jira API and get the necessary credentials:
+3. Set up environment variables:
 
-4. Access OpenAI API and get the necessary credentials:
+Copy `.env.example` to `.env`:
+  ```bash
+  cp .env.example .env
+  ```
+
+Edit `.env` with your credentials:
+
+Get your OpenAI personal access token from https://developer.api.chatgpt.tomtom-global.com/profile and add it to the `.env` file as follows:
+```
+AZURE_OPENAI_API_KEY="secret"
+```
+
+Get your JIRA personal access token from https://id.atlassian.com/manage-profile/security/api-tokens and add it to the `.env` file as follows:
+```
+JIRA_EMAIL="bob.thebuilder@yeswecan.com"
+JIRA_PAT_TOKEN="your JIRA PAT"
+```
+
+## Usage
+
+1. Create the initial database:
+```
+python src/examples/create_database.py
+```
+
+2. Search for duplicates:
+```
+python src/examples/query_database.py
+```
+
+3. Analyze database similarities:
+```
+python src/examples/analyze_database.py
+```
