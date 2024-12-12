@@ -21,7 +21,7 @@ def main():
     )
     
     # Example JQL filter
-    jql_filter = 'project in ("Audi HCP3", Navigation) AND issuetype = Bug AND status = Done AND Customer in (Audi_HCP3, Audi_OCI) AND ("External Reference" is not EMPTY OR "Customer ID" is not EMPTY) AND created > startOfMonth(-6)'
+    jql_filter = 'project in ("Audi HCP3", Navigation) AND issuetype = Bug AND Customer in (Audi_HCP3, Audi_OCI) AND ("External Reference" is not EMPTY OR "Customer ID" is not EMPTY) AND created > startOfMonth(-6)'
     
     print(f"Fetching bugs with filter: {jql_filter}")
     bugs_df = finder.fetch_bugs(jql_filter)

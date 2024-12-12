@@ -1,6 +1,5 @@
 from langchain_openai import AzureOpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain.text_splitter import CharacterTextSplitter
 from jira import JIRA
 import pandas as pd
 import os
@@ -19,8 +18,7 @@ class JiraDuplicateFinder:
         jira_api_token: str,
         azure_deployment: str = "dep-embed-ada",
         azure_api_version: str = "2024-10-21",
-        chunk_size: int = 1500,
-        chunk_overlap: int = 200,
+        chunk_size: int = 1000,
         model: str = "text-embedding-ada-002"
     ):
         """
@@ -33,7 +31,6 @@ class JiraDuplicateFinder:
             azure_deployment: Azure OpenAI deployment name
             azure_api_version: Azure OpenAI API version
             chunk_size: Size of text chunks for processing
-            chunk_overlap: Overlap between chunks
             model: Azure OpenAI model name
         """
         # Initialize Azure OpenAI embeddings
@@ -42,16 +39,6 @@ class JiraDuplicateFinder:
             azure_deployment=azure_deployment,
             openai_api_version=azure_api_version,
             chunk_size=chunk_size
-        )
-
-        self.chunk_size = chunk_size 
-        
-        # Initialize text splitter for long descriptions
-        self.text_splitter = CharacterTextSplitter(
-            separator="\n",
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-            length_function=len
         )
         
         # Initialize Jira client
@@ -89,7 +76,24 @@ class JiraDuplicateFinder:
             start_at += len(chunk)
         
         return all_issues[:max_results]  # Ensure we don't exceed max_results
-
+    
+    def clean_text(self, text: str) -> str:
+        """Clean and condense bug description."""
+        # Remove extra whitespace and newlines
+        if not text:
+            return ""
+            
+        # Replace all types of line endings and whitespace
+        cleaned = text.replace('\r\n', ' ')  # Windows line endings
+        cleaned = cleaned.replace('\n', ' ')  # Unix line endings
+        cleaned = cleaned.replace('\r', ' ')  # Old Mac line endings
+        cleaned = cleaned.replace('\t', ' ')  # Tabs
+        
+        # Remove multiple spaces
+        cleaned = ' '.join(cleaned.split())
+        
+        return cleaned.strip()
+            
     def fetch_bugs(
         self,
         jql_filter: str,
@@ -112,6 +116,7 @@ class JiraDuplicateFinder:
             combined_text = f"Title: {issue.fields.summary}\n\n"
             if issue.fields.description:
                 combined_text += f"Description: {issue.fields.description}"
+            cleaned_text = self.clean_text(combined_text)
                 
             bugs_data.append({
                 'key': issue.key,
@@ -122,7 +127,7 @@ class JiraDuplicateFinder:
                 'status': str(issue.fields.status),
                 'priority': str(issue.fields.priority),
                 'labels': [str(label) for label in issue.fields.labels],
-                'text': combined_text
+                'text': cleaned_text
             })
             
         self.bugs_data = pd.DataFrame(bugs_data)
@@ -136,6 +141,7 @@ class JiraDuplicateFinder:
     ) -> None:
         """
         Create vector store from bug descriptions.
+        Each bug is kept as a single unit for embedding.
         """
         if bugs_df is not None:
             self.bugs_data = bugs_df
@@ -148,17 +154,6 @@ class JiraDuplicateFinder:
             
         texts = self.bugs_data['text'].tolist()
         metadata = self.bugs_data.to_dict('records')
-        
-        # Split long texts if needed
-        if any(len(text) > self.chunk_size for text in texts):
-            processed_texts = []
-            processed_metadata = []
-            for text, meta in zip(texts, metadata):
-                splits = self.text_splitter.split_text(text)
-                processed_texts.extend(splits)
-                processed_metadata.extend([meta] * len(splits))
-            texts = processed_texts
-            metadata = processed_metadata
         
         self.vector_store = FAISS.from_texts(
             texts,
