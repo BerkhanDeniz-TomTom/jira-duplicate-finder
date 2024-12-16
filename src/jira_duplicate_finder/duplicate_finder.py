@@ -164,31 +164,37 @@ class JiraDuplicateFinder:
     def save_database(
         self,
         directory: str = "./bug_database"
-    ) -> None:
+    ) -> str:
         """
-        Save the vector store and bug data to disk.
+        Save the database with timestamp.
+        Returns the created directory name.
         """
         if self.vector_store is None or self.bugs_data is None:
             raise ValueError("No database to save. Build vector store first")
         
         if len(self.bugs_data) == 0:
             raise ValueError("No bug data to save")
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        directory_with_timestamp = os.path.join(directory, f"db_{timestamp}")
             
-        os.makedirs(directory, exist_ok=True)
+        os.makedirs(directory_with_timestamp, exist_ok=True)
         
         # Save vector store
-        self.vector_store.save_local(directory)
+        self.vector_store.save_local(directory_with_timestamp)
 
         print(f"Current working directory: {os.getcwd()}")
-        print(f"Saving database to: {os.path.abspath(directory)}")
+        print(f"Saving database to: {os.path.abspath(directory_with_timestamp)}")
         
         # Save bugs data and metadata
         metadata = {
             'bugs_data': self.bugs_data,
             'last_update': self.last_update
         }
-        with open(os.path.join(directory, 'metadata.pkl'), 'wb') as f:
+        with open(os.path.join(directory_with_timestamp, 'metadata.pkl'), 'wb') as f:
             pickle.dump(metadata, f)
+
+        return directory_with_timestamp
 
     def load_database(
         self,
@@ -244,7 +250,8 @@ class JiraDuplicateFinder:
                     'created': doc.metadata['created'],
                     'updated': doc.metadata['updated'],
                     'labels': doc.metadata['labels'],
-                    'similarity_score': f"{similarity:.2%}"
+                    'similarity_score': f"{similarity:.2%}",
+                    'text_length': len(doc.metadata['text'])
                 }
                 potential_duplicates.append(duplicate_info)
                 
