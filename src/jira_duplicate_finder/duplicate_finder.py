@@ -6,7 +6,9 @@ import os
 from dotenv import load_dotenv
 import pickle
 from typing import List, Dict, Optional, Union, Any
+from tqdm import tqdm
 from datetime import datetime
+from time import sleep
 
 class JiraDuplicateFinder:
     """A class to find duplicate Jira bugs using semantic similarity with Azure OpenAI."""
@@ -152,14 +154,33 @@ class JiraDuplicateFinder:
         if self.vector_store is not None and not force_rebuild:
             return
             
-        texts = self.bugs_data['text'].tolist()
-        metadata = self.bugs_data.to_dict('records')
         
-        self.vector_store = FAISS.from_texts(
-            texts,
-            self.embeddings,
-            metadatas=metadata
-        )
+        # Process in batches
+        batch_size = 500
+        sleep_time = 2
+        for i in tqdm(range(0, len(self.bugs_data), batch_size)):
+            batch_df = self.bugs_data.iloc[i:i + batch_size]
+            
+            texts = batch_df['text'].tolist()
+            metadata = batch_df.to_dict('records')
+            
+            # For the first batch, create the vector store
+            if i == 0:
+                self.vector_store = FAISS.from_texts(
+                    texts,
+                    self.embeddings,
+                    metadatas=metadata
+                )
+            # For subsequent batches, add to existing store
+            else:
+                self.vector_store.add_texts(
+                    texts,
+                    metadatas=metadata
+                )
+            
+            # Wait between batches to avoid rate limits
+            if i + batch_size < len(self.bugs_data):  # Don't sleep after last batch
+                sleep(sleep_time)
 
     def save_database(
         self,
