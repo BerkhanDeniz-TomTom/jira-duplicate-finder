@@ -41,13 +41,23 @@ JIRA_PAT_TOKEN="your JIRA PAT"
 ```
 python src/examples/create_database.py
 ```
+This will create a timestamped database folder under `bug_database/`
 
 2. Search for duplicates:
+
 ```
+# Use latest database
 python src/examples/query_database.py
+
+# Use specific database folder
+python src/examples/query_database.py db_20240417_001722
 ```
 
 3. Analyze database similarities:
 ```
+# Use latest database
 python src/examples/analyze_database.py
+
+# Use specific database folder
+python src/examples/analyze_database.py db_20240417_001722
 ```
