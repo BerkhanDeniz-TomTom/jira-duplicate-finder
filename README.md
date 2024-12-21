@@ -47,10 +47,10 @@ This will create a timestamped database folder under `bug_database/`
 
 ```
 # Use latest database
-python src/examples/query_database.py
+python src/examples/query_database.py HCP3-21607
 
 # Use specific database folder
-python src/examples/query_database.py db_20240417_001722
+python src/examples/query_database.py HCP3-21607 db_20240417_001722
 ```
 
 3. Analyze database similarities:

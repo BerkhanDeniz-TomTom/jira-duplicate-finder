@@ -8,3 +8,4 @@ pandas
 faiss-cpu
 matplotlib
 scikit-learn
+tqdm

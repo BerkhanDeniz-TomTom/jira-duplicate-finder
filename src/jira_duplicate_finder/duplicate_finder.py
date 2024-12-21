@@ -9,6 +9,15 @@ from typing import List, Dict, Optional, Union, Any
 from tqdm import tqdm
 from datetime import datetime
 from time import sleep
+import sys
+from pathlib import Path
+
+# Add src to Python path
+src_path = str(Path(__file__).parent.parent)
+if src_path not in sys.path:
+    sys.path.append(src_path)
+
+from preprocessing.text_processor import TextProcessor
 
 class JiraDuplicateFinder:
     """A class to find duplicate Jira bugs using semantic similarity with Azure OpenAI."""
@@ -48,6 +57,8 @@ class JiraDuplicateFinder:
             server=jira_server,
             basic_auth=(jira_email, jira_api_token)
         )
+
+        self.text_processor = TextProcessor()
         
         self.vector_store = None
         self.bugs_data = None
@@ -78,23 +89,6 @@ class JiraDuplicateFinder:
             start_at += len(chunk)
         
         return all_issues[:max_results]  # Ensure we don't exceed max_results
-    
-    def clean_text(self, text: str) -> str:
-        """Clean and condense bug description."""
-        # Remove extra whitespace and newlines
-        if not text:
-            return ""
-            
-        # Replace all types of line endings and whitespace
-        cleaned = text.replace('\r\n', ' ')  # Windows line endings
-        cleaned = cleaned.replace('\n', ' ')  # Unix line endings
-        cleaned = cleaned.replace('\r', ' ')  # Old Mac line endings
-        cleaned = cleaned.replace('\t', ' ')  # Tabs
-        
-        # Remove multiple spaces
-        cleaned = ' '.join(cleaned.split())
-        
-        return cleaned.strip()
             
     def fetch_bugs(
         self,
@@ -112,25 +106,34 @@ class JiraDuplicateFinder:
             DataFrame containing bug information
         """
         issues = self.get_all_issues(jql_filter, max_results)
+
+        total_issues = len(issues)
+        print(f"\nProcessing {total_issues} tickets...")
         
         bugs_data = []
-        for issue in issues:
-            combined_text = f"Title: {issue.fields.summary}\n\n"
-            if issue.fields.description:
-                combined_text += f"Description: {issue.fields.description}"
-            cleaned_text = self.clean_text(combined_text)
-                
-            bugs_data.append({
-                'key': issue.key,
-                'summary': issue.fields.summary,
-                'description': issue.fields.description or '',
-                'created': issue.fields.created,
-                'updated': issue.fields.updated,
-                'status': str(issue.fields.status),
-                'priority': str(issue.fields.priority),
-                'labels': [str(label) for label in issue.fields.labels],
-                'text': cleaned_text
-            })
+        for issue in tqdm(issues, desc="Processing tickets", total=total_issues):
+            try:
+                # Process with GPT
+                processed_text = self.text_processor.preprocess_ticket(
+                    title=issue.fields.summary or '',
+                    description=issue.fields.description or '',
+                    analysis_findings=getattr(issue.fields, 'customfield_10357', None) or '',
+                    additional_info=getattr(issue.fields, 'customfield_10356', None) or ''
+                )
+                    
+                bugs_data.append({
+                    'key': issue.key,
+                    'summary': issue.fields.summary,
+                    'description': issue.fields.description or '',
+                    'created': issue.fields.created,
+                    'updated': issue.fields.updated,
+                    'status': str(issue.fields.status),
+                    'priority': str(issue.fields.priority),
+                    'labels': [str(label) for label in issue.fields.labels],
+                    'text': processed_text
+                })
+            except Exception as e:
+                print(f"\nError processing {issue.key}: {str(e)}")
             
         self.bugs_data = pd.DataFrame(bugs_data)
         self.last_update = datetime.now()
