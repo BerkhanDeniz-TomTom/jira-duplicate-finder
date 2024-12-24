@@ -16,7 +16,7 @@ class TextProcessor:
             api_version="2024-10-21",
             azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
         )
-        self.model = model or 'dep-o1-mini'
+        self.model = model or 'dep-gpt-4o'
     
     def preprocess_ticket(self, title: str, description: str, analysis_findings: str = None, additional_info: str = None) -> str:
         """Preprocess ticket using GPT."""
