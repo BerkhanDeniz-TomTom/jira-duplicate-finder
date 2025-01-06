@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import pickle
 from typing import List, Dict, Optional, Union, Any
 from tqdm import tqdm
+import json
 from datetime import datetime
 from time import sleep
 import sys
@@ -120,6 +121,9 @@ class JiraDuplicateFinder:
                     analysis_findings=getattr(issue.fields, 'customfield_10357', None) or '',
                     additional_info=getattr(issue.fields, 'customfield_10356', None) or ''
                 )
+
+                if processed_text is None:
+                    print(f"Warning: Preprocessing returned None for ticket {issue.key}")
                     
                 bugs_data.append({
                     'key': issue.key,
@@ -166,19 +170,29 @@ class JiraDuplicateFinder:
             
             texts = batch_df['text'].tolist()
             metadata = batch_df.to_dict('records')
-            
+
+            # Filter out None values and keep track of valid indices
+            valid_texts = []
+            valid_metadata = []
+            for idx, (text, meta) in enumerate(zip(texts, metadata)):
+                if text is not None and isinstance(text, str):
+                    valid_texts.append(text)
+                    valid_metadata.append(meta)
+                else:
+                    print(f"Warning: Skipping invalid text for bug {meta.get('key', f'at index {idx}')}") 
+    
             # For the first batch, create the vector store
             if i == 0:
                 self.vector_store = FAISS.from_texts(
-                    texts,
+                    valid_texts,
                     self.embeddings,
-                    metadatas=metadata
+                    metadatas=valid_metadata
                 )
             # For subsequent batches, add to existing store
             else:
                 self.vector_store.add_texts(
-                    texts,
-                    metadatas=metadata
+                    valid_texts,
+                    metadatas=valid_metadata
                 )
             
             # Wait between batches to avoid rate limits
@@ -217,6 +231,22 @@ class JiraDuplicateFinder:
         }
         with open(os.path.join(directory_with_timestamp, 'metadata.pkl'), 'wb') as f:
             pickle.dump(metadata, f)
+
+        # Save summaries as JSON
+        summaries = []
+        for _, row in self.bugs_data.iterrows():
+            summary = {
+                'key': row['key'],
+                'title': row['summary'],
+                'processed_text': row['text'],
+                'status': row['status'],
+                'created': row['created'],
+                'updated': row['updated']
+            }
+            summaries.append(summary)
+
+        with open(os.path.join(directory_with_timestamp, 'summaries.json'), 'w', encoding='utf-8') as f:
+            json.dump(summaries, f, indent=2, default=str)
 
         return directory_with_timestamp
 
