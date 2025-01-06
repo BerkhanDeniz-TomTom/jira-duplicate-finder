@@ -272,28 +272,42 @@ class JiraDuplicateFinder:
     def find_duplicates(
         self,
         query_text: str,
+        query_ticket_id: str = None,
         num_similar: int = 5,
         similarity_threshold: float = 0.85,
         status_filter: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """
         Find potentially duplicate bugs based on semantic similarity.
+        Excludes the query ticket from results if ticket_id is provided.
         """
         if self.vector_store is None:
             raise ValueError("Vector store not initialized. Call build_vector_store first")
             
-        search_kwargs = {}
+        # Configure for exact search
+        search_kwargs = {
+            'search_type': 'similarity_score_threshold',
+            'score_threshold': 1 - similarity_threshold,  # Convert similarity to distance
+        }
+        
         if status_filter:
             search_kwargs['filter'] = {'status': {'$in': status_filter}}
+
+        # Get one extra result if we need to filter out the query ticket
+        search_k = num_similar + (1 if query_ticket_id else 0)
             
         similar_bugs = self.vector_store.similarity_search_with_score(
             query_text,
-            k=num_similar,
+            k=search_k,
             **search_kwargs
         )
         
         potential_duplicates = []
         for doc, score in similar_bugs:
+            # Skip if it's the same ticket
+            if query_ticket_id and doc.metadata['key'] == query_ticket_id:
+                continue
+
             similarity = 1 - score
             if similarity >= similarity_threshold:
                 duplicate_info = {
