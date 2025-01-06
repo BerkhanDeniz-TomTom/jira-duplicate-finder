@@ -18,17 +18,42 @@ class TextProcessor:
         )
         self.model = model or 'dep-gpt-4o'
     
-    def preprocess_ticket(self, title: str, description: str, analysis_findings: str = None, additional_info: str = None) -> str:
-        """Preprocess ticket using GPT."""
-        prompt = f"""Extract and summarize the core technical problem from this ticket.
-Provide a concise summary that:
-- Focuses on the actual problem, not auxiliary information
-- Prioritizes information from Analysis Findings if available
-- Includes specific locations or coordinates in quotes if mentioned
-- Includes specific timing in quotes if relevant
-- Avoids using words like 'bug' or 'issue' or 'summary'
-- Excludes technical details unless they're part of the core problem
+    def preprocess_ticket(
+        self,
+        title: str,
+        description: str,
+        analysis_findings: str = None,
+        additional_info: str = None
+    ) -> str:
+        """
+        Preprocess ticket for similarity search using standardized format.
+        Returns a concise, structured summary suitable for embeddings.
+        """
+        prompt = f"""Create a standardized summary for similarity matching.
 
+Follow these steps:
+1. Identify the core technical problem
+2. Extract any specific error messages or identifiers in quotes
+3. Include location or timing ONLY if they are part of the pattern
+4. Create a 2-3 sentence summary that captures:
+- What is happening (main technical issue)
+- When relevant: where/when it occurs (pattern)
+- When relevant: specific identifiers or error messages
+
+Guidelines:
+- Focus on patterns rather than specific instances
+- Include coordinates or locations only if they help identify similar issues
+- Keep technical details only if they help match similar problems
+- Avoid words like 'bug', 'issue', 'problem'
+- Ensure summary is under 100 words
+- Use consistent terminology for similar concepts
+
+Example Good Summaries:
+- "Login authentication fails with 'Invalid Token' message after password reset"
+- "Voice navigation provides incorrect exit number at roundabouts in Korea region"
+- "Route calculation repeatedly loses charging plan during long-distance planning"
+
+Ticket Information:
 Title: {title}"""
 
         if analysis_findings:
