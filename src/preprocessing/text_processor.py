@@ -19,56 +19,81 @@ class TextProcessor:
         self.model = model or 'dep-gpt-4o'
     
     def preprocess_ticket(
-        self,
-        title: str,
-        description: str,
-        analysis_findings: str = None,
-        additional_info: str = None
-    ) -> str:
-        """
-        Preprocess ticket for similarity search using standardized format.
-        Returns a concise, structured summary suitable for embeddings.
-        """
-        prompt = f"""Create a standardized summary for similarity matching.
+            self,
+            title: str,
+            description: str,
+            analysis_findings: str = None,
+            additional_info: str = None
+        ) -> str:
+            """
+            Preprocess ticket for similarity search using standardized format.
+            Returns a concise, structured summary suitable for embeddings.
+            """
+            # Input validation and cleaning
+            if not title or not description:
+                raise ValueError("Title and description are required")
 
-Follow these steps:
-1. Identify the core technical problem
-2. Extract any specific error messages or identifiers in quotes
-3. Include location or timing ONLY if they are part of the pattern
-4. Create a 2-3 sentence summary that captures:
-- What is happening (main technical issue)
-- When relevant: where/when it occurs (pattern)
-- When relevant: specific identifiers or error messages
+            # Clean inputs
+            title = title.strip() if title else ""
+            description = description.strip() if description else ""
+            analysis_findings = analysis_findings.strip() if analysis_findings else ""
+            additional_info = additional_info.strip() if additional_info else ""
 
-Guidelines:
-- Focus on patterns rather than specific instances
-- Include coordinates or locations only if they help identify similar issues
-- Keep technical details only if they help match similar problems
-- Avoid words like 'bug', 'issue', 'problem'
-- Ensure summary is under 100 words
-- Use consistent terminology for similar concepts
+            system_prompt = """You are a technical expert specializing in standardizing bug descriptions for similarity matching.
+    Your task is to create concise, standardized summaries that:
+    1. Start with an action verb (displays, shows, calculates, etc.)
+    2. Focus on the core technical behavior
+    3. Include regional patterns only if systematic
+    4. Avoid implementation details, coordinates, or version numbers
+    5. Use present tense and clear technical language"""
 
-Example Good Summaries:
-- "Login authentication fails with 'Invalid Token' message after password reset"
-- "Voice navigation provides incorrect exit number at roundabouts in Korea region"
-- "Route calculation repeatedly loses charging plan during long-distance planning"
+            user_prompt = f"""Create a standardized summary focusing ONLY on the core technical behavior.
 
-Ticket Information:
-Title: {title}"""
+    Format Rules:
+    [Action verb] + [Core behavior] + [Regional pattern if systematic]
 
-        if analysis_findings:
-            prompt += f"\nAnalysis Findings: {analysis_findings}"
+    Guidelines:
+    - Focus ONLY on the repeatable technical behavior
+    - DO NOT include:
+        * Specific coordinates
+        * Software versions
+        * Test counts
+        * Individual instances
+        * Implementation details
+    - Use simple present tense
+    - Maximum 2 sentences
+    - Only include region if the issue is region-specific
+
+    Good Examples:
+    - "Calculates routes through blocked roads in Korea region"
+    - "Rejects valid city name 'Ingolstadt' while accepting other destinations"
+    - "Announces incorrect exit numbers at roundabouts in Japan"
+    - "Loses charging plan during long-distance route calculations"
+
+    Bad Examples:
+    - "Route calculation fails at coordinates 37.529, 126.884" (too specific)
+    - "Issue occurs in version VR41_2_A13E_HCP3" (version not needed)
+    - "Problem happens 3/3 times" (test count not needed)
+    - "Multiple routing problems in the area" (too vague)
+
+    Ticket Information:
+    Title: {title}"""
+
+            if analysis_findings:
+                user_prompt += f"\nAnalysis Findings: {analysis_findings}"
+                
+            if additional_info:
+                user_prompt += f"\nAdditional Information: {additional_info}"
+                
+            user_prompt += f"\nDescription: {description}"
+
+            completion = self.client.chat.completions.create(
+                model=self.model,
+                temperature=0,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
             
-        if additional_info:
-            prompt += f"\nAdditional Information: {additional_info}"
-            
-        prompt += f"\nDescription: {description}"
-
-        completion = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
-        )
-        
-        return completion.choices[0].message.content
+            return completion.choices[0].message.content

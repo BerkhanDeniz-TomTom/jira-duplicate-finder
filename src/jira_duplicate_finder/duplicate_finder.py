@@ -319,7 +319,8 @@ class JiraDuplicateFinder:
                     'updated': doc.metadata['updated'],
                     'labels': doc.metadata['labels'],
                     'similarity_score': f"{similarity:.2%}",
-                    'text_length': len(doc.metadata['text'])
+                    'text_length': len(doc.metadata['text']),
+                    'processed_text': doc.metadata.get('processed_text', doc.page_content)  
                 }
                 potential_duplicates.append(duplicate_info)
                 

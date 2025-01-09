@@ -44,13 +44,24 @@ python src/examples/create_database.py
 This will create a timestamped database folder under `bug_database/`
 
 2. Search for duplicates:
+There are two ways to search for duplicates:
 
+a. Search using a Jira ticket ID:
 ```
 # Use latest database
-python src/examples/query_database.py HCP3-21607
+python src/examples/query_database.py --ticket HCP3-21607
 
 # Use specific database folder
-python src/examples/query_database.py HCP3-21607 db_20240417_001722
+python src/examples/query_database.py --ticket HCP3-21607 db_20240417_001722
+```
+
+b. Search using a text description:
+```
+# Use latest database
+python src/examples/query_database.py --text "Displays incorrect route guidance in Japan region"
+
+# Use specific database folder
+python src/examples/query_database.py --text "Announces wrong exit numbers" db_20240417_001722
 ```
 
 3. Analyze database similarities:

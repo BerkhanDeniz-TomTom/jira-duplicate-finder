@@ -27,18 +27,38 @@ def get_latest_database(base_dir: str = "./bug_database") -> str:
 def main():
     load_dotenv()
 
-    # Check if ticket ID is provided
+    # Check command line arguments
     if len(sys.argv) < 2:
-        print("Usage: python query_database.py <ticket_id> [database_folder]")
-        print("Example: python query_database.py NAV-12345 db_20240417_001722")
-        print("If database_folder is not provided, latest will be used")
+        print("\nUsage:")
+        print("1. Search by ticket ID:")
+        print("   python query_database.py --ticket NAV-12345 [database_folder]")
+        print("2. Search by text description:")
+        print("   python query_database.py --text \"Displays incorrect route guidance\" [database_folder]")
+        print("\nFormat for text description:")
+        print("[Action verb] + [Core behavior] + [Regional pattern if systematic]")
+        print("\nExamples:")
+        print("- \"Calculates routes through blocked roads in Korea region\"")
+        print("- \"Announces incorrect exit numbers at roundabouts\"")
+        print("- \"Displays wrong lane guidance during navigation\"")
+        print("\nNote: If database_folder is not provided, latest will be used")
         return
     
-    ticket_id = sys.argv[1]
+    # Parse search type
+    search_type = sys.argv[1]
+    if search_type not in ['--ticket', '--text']:
+        print("Error: First argument must be either --ticket or --text")
+        return
+
+    # Get query
+    if len(sys.argv) < 3:
+        print("Error: Please provide ticket ID or text description")
+        return
+    
+    query = sys.argv[2]
 
     # Get database path from command line argument or use latest
-    if len(sys.argv) > 2:
-        db_name = sys.argv[2]
+    if len(sys.argv) > 3:
+        db_name = sys.argv[3]
         db_path = os.path.join("./bug_database", db_name)
         if not os.path.exists(db_path):
             print(f"Error: Database '{db_path}' not found")
@@ -50,25 +70,8 @@ def main():
         except ValueError as e:
             print(f"Error: {e}")
             return
-        
-    # Initialize Jira client
-    jira = JIRA(
-        server=os.getenv('JIRA_SERVER'),
-        basic_auth=(os.getenv('JIRA_EMAIL'), os.getenv('JIRA_PAT_TOKEN'))
-    )
 
     try:
-        issue = jira.issue(ticket_id)
-
-        text_processor = TextProcessor()
-
-        processed_query = text_processor.preprocess_ticket(
-            title=issue.fields.summary or '',
-            description=issue.fields.description or '',
-            analysis_findings=getattr(issue.fields, 'customfield_10357', None) or '',
-            additional_info=getattr(issue.fields, 'customfield_10356', None) or ''
-        )
-
         finder = JiraDuplicateFinder(
             jira_server=os.getenv('JIRA_SERVER'),
             jira_email=os.getenv('JIRA_EMAIL'),
@@ -79,15 +82,39 @@ def main():
         finder.load_database(db_path)
         print(f"Loaded {len(finder.bugs_data)} bugs")
 
-        print("\nSearching for similar bugs...")
-        print(f"Input ticket: {ticket_id}")
-        print(f"Title: {issue.fields.summary}")
+        if search_type == '--ticket':
+            # Initialize Jira client
+            jira = JIRA(
+                server=os.getenv('JIRA_SERVER'),
+                basic_auth=(os.getenv('JIRA_EMAIL'), os.getenv('JIRA_PAT_TOKEN'))
+            )
+
+            issue = jira.issue(query)
+
+            text_processor = TextProcessor()
+
+            processed_query = text_processor.preprocess_ticket(
+                title=issue.fields.summary or '',
+                description=issue.fields.description or '',
+                analysis_findings=getattr(issue.fields, 'customfield_10357', None) or '',
+                additional_info=getattr(issue.fields, 'customfield_10356', None) or ''
+            )
+
+            print(f"Input ticket ID: {query}")
+            print(f"Title: {issue.fields.summary}")
+
+        else:
+            processed_query = query
+            print("\nInput text:")
+
         print(f"Processed summary: {processed_query}")
+        print("\nSearching for similar bugs...")
 
         duplicates = finder.find_duplicates(
             processed_query,
+            query_ticket_id=query if search_type == '--ticket' else None, 
             num_similar=5,
-            similarity_threshold=0.5
+            similarity_threshold=0.7
         )
 
         if not duplicates:
@@ -97,13 +124,15 @@ def main():
         print(f"\nFound {len(duplicates)} potential duplicates:")
         for dup in duplicates:
             print(f"\nBug {dup['key']} (Similarity: {dup['similarity_score']})")
-            print(f"Summary: {dup['summary']}")
+            print(f"Title: {dup['summary']}")
+            print(f"Processed Summary: {dup['processed_text']}")  # 
             print(f"Status: {dup['status']}")
             print(f"Created: {dup['created']}")
-            # print(f"Text length: {dup['text_length']} characters")
+            print(f"Text length: {dup['text_length']} characters")
 
     except Exception as e:
-        print(f"Error processing ticket {ticket_id}: {str(e)}")
+        error_msg = f"Error processing {'ticket' if search_type == '--ticket' else 'text'} {query}: {str(e)}"
+        print(error_msg)
         
 if __name__ == "__main__":
     main()
